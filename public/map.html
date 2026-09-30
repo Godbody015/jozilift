@@ -1,1 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JoziLift Map: Find it. Stop it. Ride it.</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{--black:#0a0a0a;--yellow:#FFD000;--green:#00C853;--white:#f5f5f0;--grey:#17171a;--mid:#2c2c30;--muted:#9a9aa0}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:var(--black);color:var(--white);font-family:'DM Sans',sans-serif;overflow:hidden}
+  #map{position:absolute;inset:0;background:#141416}
+  .brand{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:500;font:28px 'Bebas Neue',sans-serif;background:rgba(10,10,10,.85);padding:4px 14px;border-radius:99px;border:1px solid var(--mid);color:var(--white);text-decoration:none}
+  .brand span{color:var(--yellow)}
+  .driverbtn{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);right:14px;z-index:500;background:var(--yellow);color:var(--black);font-weight:700;font-size:14px;padding:10px 16px;border-radius:99px;text-decoration:none}
+  .card{position:absolute;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);z-index:500;max-width:440px;margin:auto;background:var(--grey);border:1px solid var(--mid);border-radius:18px;padding:18px 20px}
+  #title{font-weight:700;font-size:20px}
+  #sub{color:var(--muted);margin-top:4px;font-size:15px}
+  .taxi{width:34px;height:34px;border-radius:50%;background:var(--yellow);border:3px solid var(--black);display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 4px 10px rgba(0,0,0,.5)}
+  .me{width:18px;height:18px;border-radius:50%;background:var(--green);border:3px solid var(--black);box-shadow:0 0 0 8px rgba(0,200,83,.25)}
+  .leaflet-container{font-family:'DM Sans',sans-serif}
+  .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6)}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<a class="brand" href="/" aria-label="JoziLift home">Jozi<span>Lift</span></a>
+<a class="driverbtn" href="/driver.html">I'm a driver 🚕</a>
+<div class="card" role="status" aria-live="polite"><div id="title">Looking for taxis…</div><div id="sub">Allow location so we can show what's near you.</div></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map', { zoomControl: false }).setView([-26.2041, 28.0473], 13); // Johannesburg
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
 
+const taxiIcon = L.divIcon({ className: '', html: '<div class="taxi">🚕</div>', iconSize: [34, 34], iconAnchor: [17, 17] });
+const meIcon = L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+let meMarker = null, me = null, fitted = false;
+const markers = new Map();
+
+function metres(a, b) {
+  const R = 6371000, r = x => x * Math.PI / 180;
+  const dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const fmt = m => m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1) + ' km';
+
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(p => {
+    me = { lat: p.coords.latitude, lng: p.coords.longitude };
+    if (!meMarker) meMarker = L.marker(me, { icon: meIcon, zIndexOffset: 1000 }).addTo(map);
+    else meMarker.setLatLng(me);
+  }, () => {
+    document.getElementById('sub').textContent = 'Location is blocked. Allow it in your browser settings to see distances.';
+  }, { enableHighAccuracy: true, maximumAge: 3000 });
+}
+
+async function poll() {
+  try {
+    const taxis = await (await fetch('/api/taxis', { cache: 'no-store' })).json();
+    const seen = new Set();
+    for (const t of taxis) {
+      seen.add(t.id);
+      if (markers.has(t.id)) markers.get(t.id).setLatLng([t.lat, t.lng]);
+      else markers.set(t.id, L.marker([t.lat, t.lng], { icon: taxiIcon }).addTo(map));
+    }
+    for (const [id, m] of markers) if (!seen.has(id)) { map.removeLayer(m); markers.delete(id); }
+
+    const title = document.getElementById('title'), sub = document.getElementById('sub');
+    if (!taxis.length) { title.textContent = 'No taxis live right now'; sub.textContent = 'This updates on its own when a driver starts sharing.'; }
+    else {
+      title.textContent = taxis.length + (taxis.length === 1 ? ' taxi live' : ' taxis live');
+      if (me) {
+        const d = Math.min(...taxis.map(t => metres(me, t)));
+        sub.textContent = 'Closest is ' + fmt(d) + ' away';
+      } else sub.textContent = 'Allow location to see how far they are.';
+    }
+    if (!fitted && (taxis.length || me)) {
+      const pts = taxis.map(t => [t.lat, t.lng]); if (me) pts.push([me.lat, me.lng]);
+      map.fitBounds(pts, { padding: [70, 70], maxZoom: 16 }); fitted = true;
+    }
+  } catch (e) {
+    document.getElementById('sub').textContent = 'Connection lost. Retrying…';
+  }
+}
+poll(); setInterval(poll, 3000);
+</script>
+</body>
+</html>
