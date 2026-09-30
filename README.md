@@ -4,7 +4,7 @@
 
 Live taxi tracking for Johannesburg. JoziLift connects commuters to minibus taxis in real time: passengers see taxis on a map and drop a pickup pin, and drivers see where passengers are waiting.
 
-🔗 **Live app:** `⚠️ CHECK: https://jozilift.mogau-sebothoma.workers.dev/web
+🔗 **Live app:** `⚠️ CHECK: https://jozilift.mogau-sebothoma.workers.dev
 
 ## The problem
 
