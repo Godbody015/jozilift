@@ -11,8 +11,7 @@
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%;background:var(--black);color:var(--white);font-family:'DM Sans',sans-serif;overflow:hidden}
   #map{position:absolute;inset:0;background:#0f0f11}
-  /* Brand-tuned dark map: warm-tinted roads on near-black, instead of flat grey */
-  .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) saturate(.45) brightness(.78) contrast(1.15) sepia(.35)}
+  /* Base map is already dark and label-free, so no filter is needed (filters made it look soft) */
   .leaflet-container{font-family:'DM Sans',sans-serif;cursor:grab}
   /* Soft vignette so UI floats over the map like the home page skyline */
   .fade{position:absolute;left:0;right:0;z-index:400;pointer-events:none}
@@ -58,6 +57,9 @@
   .pinwrap{width:30px;height:34px}
   .pin{width:28px;height:28px;background:var(--yellow);border:3px solid var(--black);border-radius:50% 50% 50% 0;transform:rotate(-45deg);margin:0 1px;box-shadow:0 4px 10px rgba(0,0,0,.6)}
   .pin::after{content:'';display:block;width:8px;height:8px;background:var(--black);border-radius:50%;margin:7px}
+  .pinlabel{background:var(--yellow);color:#000;border:2px solid #000;border-radius:99px;font:700 13px 'DM Sans',sans-serif;padding:3px 12px;box-shadow:0 3px 10px rgba(0,0,0,.5)}
+  .pinlabel::before{display:none}
+  body.big .pinlabel{font-size:17px;padding:5px 14px}
   .leaflet-control-attribution{background:rgba(10,10,10,.7)!important;color:var(--muted)!important}
   .leaflet-control-attribution a{color:var(--muted)!important}
   /* Smooth gliding taxis (like Bolt) instead of jumping every 3s */
@@ -65,7 +67,7 @@
   .nomove .leaflet-marker-icon{transition:none!important}
   .taxi::before{content:'';position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--yellow);animation:pulse 2s ease-out 1s infinite}
   /* BIG VIEW: larger, higher contrast, easier to see */
-  body.big .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) saturate(.3) brightness(1.15) contrast(1.5)}
+  body.big .leaflet-tile-pane{filter:brightness(1.35) contrast(1.1)}
   body.big .taxi{transform:scale(1.7);border-color:#fff;border-width:4px;box-shadow:0 0 0 5px #000,0 0 22px 6px rgba(255,208,0,.8)}
   body.big .me{transform:scale(1.8)}
   body.big .pinwrap{transform:scale(1.7);transform-origin:50% 100%}
@@ -109,7 +111,11 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const map = L.map('map', { zoomControl: false }).setView([-26.2041, 28.0473], 13);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+// Clean dark base map with NO place labels (Esri keeps labels in a separate layer we don't load)
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+  maxNativeZoom: 16, maxZoom: 17, detectRetina: true,
+  attribution: 'Tiles &copy; Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors'
+}).addTo(map);
 
 const $ = id => document.getElementById(id);
 const meIcon = L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
@@ -166,10 +172,11 @@ $('bPin').onclick = () => {
   pinMode = !pinMode; $('bPin').classList.toggle('on', pinMode);
   if (pinMode) $('sub').textContent = 'Tap the map where you want to be picked up.';
 };
-function setPin(lat, lng) {
+function setPin(lat, lng, name) {
   pin = { lat, lng }; pinMode = false; $('bPin').classList.add('on');
   if (pinMarker) map.removeLayer(pinMarker);
   pinMarker = L.marker(pin, { icon: pinIcon, zIndexOffset: 900 }).addTo(map);
+  pinMarker.bindTooltip(name || 'Pickup spot', { permanent: true, direction: 'top', offset: [0, -38], className: 'pinlabel' });
   render();
 }
 map.on('click', e => { if (pinMode) setPin(e.latlng.lat, e.latlng.lng); });
@@ -190,7 +197,7 @@ $('sForm').addEventListener('submit', async e => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'opt';
       b.textContent = r.display_name.split(',').slice(0, 3).join(',');
       b.onclick = () => {
-        setPin(parseFloat(r.lat), parseFloat(r.lon));
+        setPin(parseFloat(r.lat), parseFloat(r.lon), r.display_name.split(',')[0]);
         map.flyTo([r.lat, r.lon], 16); sRes.replaceChildren(); $('sIn').blur();
       };
       sRes.append(b);
@@ -232,7 +239,7 @@ function render() {
     const name = document.createElement('span'); name.textContent = '🚕 ' + t.id;
     const info = document.createElement('small');
     info.textContent = (t.d != null ? fmt(t.d) + ' · ' : '') + Math.max(0, Math.round((t.age || 0) / 1000)) + 's ago';
-    b.append(name, info); b.onclick = () => map.flyTo([t.lat, t.lng], 17); box.append(b);
+    b.append(name, info); b.onclick = () => map.flyTo([t.lat, t.lng], 16); box.append(b);
   });
 }
 
