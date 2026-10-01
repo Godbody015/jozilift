@@ -46,7 +46,25 @@
   .pin::after{content:'';display:block;width:8px;height:8px;background:var(--black);border-radius:50%;margin:7px}
   .leaflet-control-attribution{background:rgba(10,10,10,.7)!important;color:var(--muted)!important}
   .leaflet-control-attribution a{color:var(--muted)!important}
-  @media (prefers-reduced-motion:reduce){.taxi::after{animation:none}}
+  /* Smooth gliding taxis (like Bolt) instead of jumping every 3s */
+  .leaflet-marker-icon{transition:transform 3s linear}
+  .nomove .leaflet-marker-icon{transition:none!important}
+  .taxi::before{content:'';position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--yellow);animation:pulse 2s ease-out 1s infinite}
+  /* BIG VIEW: larger, higher contrast, easier to see */
+  body.big .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) saturate(.3) brightness(1.15) contrast(1.5)}
+  body.big .taxi{transform:scale(1.7);border-color:#fff;border-width:4px;box-shadow:0 0 0 5px #000,0 0 22px 6px rgba(255,208,0,.8)}
+  body.big .me{transform:scale(1.8)}
+  body.big .pinwrap{transform:scale(1.7);transform-origin:50% 100%}
+  body.big .tag{font-size:15px;top:-34px;padding:4px 12px;color:#000;background:var(--yellow);border-color:#000}
+  body.big #title{font-size:28px}
+  body.big #sub{font-size:19px;color:var(--white);line-height:1.4}
+  body.big .row{font-size:19px;padding:16px}
+  body.big .row small{color:var(--white);font-size:16px}
+  body.big .fab{width:60px;height:60px;font-size:26px;border-width:2px;border-color:var(--white)}
+  body.big .brand,body.big .driverbtn{font-size:inherit}
+  body.big .driverbtn{font-size:17px;padding:12px 18px}
+  body.big .leaflet-control-attribution{font-size:11px}
+  @media (prefers-reduced-motion:reduce){.taxi::after,.taxi::before{animation:none}.leaflet-marker-icon{transition:none}}
 </style>
 </head>
 <body>
@@ -58,6 +76,8 @@
   <button class="fab" id="bMe" aria-label="Centre on my location">📍</button>
   <button class="fab" id="bAll" aria-label="Show all taxis">🌍</button>
   <button class="fab" id="bPin" aria-label="Drop a pickup pin">📌</button>
+  <button class="fab" id="bBig" aria-label="Toggle big high-contrast view" aria-pressed="true">👁️</button>
+  <button class="fab" id="bSay" aria-label="Read out nearest taxi">🔊</button>
 </div>
 <div class="sheet" role="status" aria-live="polite">
   <div class="handle"></div>
@@ -98,6 +118,28 @@ if (navigator.geolocation) {
 
 $('bMe').onclick = () => me ? map.flyTo([me.lat, me.lng], 16) : ($('sub').textContent = 'Waiting for your location…');
 $('bAll').onclick = () => fit(true);
+
+// Big view: ON by default, remembered between visits
+function setBig(on) {
+  document.body.classList.toggle('big', on);
+  $('bBig').classList.toggle('on', on); $('bBig').setAttribute('aria-pressed', on);
+  line.setStyle({ weight: on ? 6 : 3, dashArray: on ? '1 12' : '2 8' });
+  try { localStorage.setItem('bigView', on ? '1' : '0'); } catch (e) {}
+}
+let startBig = true; try { startBig = localStorage.getItem('bigView') !== '0'; } catch (e) {}
+setBig(startBig);
+$('bBig').onclick = () => setBig(!document.body.classList.contains('big'));
+
+// Voice: reads the nearest taxi out loud
+$('bSay').onclick = () => {
+  if (!('speechSynthesis' in window)) { $('sub').textContent = 'Voice is not supported on this device.'; return; }
+  speechSynthesis.cancel();
+  speechSynthesis.speak(new SpeechSynthesisUtterance($('title').textContent + '. ' + $('sub').textContent));
+};
+
+// Stop taxis gliding while the map zooms
+map.on('zoomstart', () => document.body.classList.add('nomove'));
+map.on('zoomend', () => setTimeout(() => document.body.classList.remove('nomove'), 150));
 $('bPin').onclick = () => {
   if (pin) { pin = null; map.removeLayer(pinMarker); pinMarker = null; $('bPin').classList.remove('on'); render(); return; }
   pinMode = !pinMode; $('bPin').classList.toggle('on', pinMode);
