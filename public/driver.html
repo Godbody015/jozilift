@@ -18,29 +18,63 @@
   input:focus-visible,button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   button{padding:20px;font:700 20px 'DM Sans',sans-serif;border:0;border-radius:14px;background:var(--yellow);color:var(--black);cursor:pointer}
   button.stop{background:var(--red);color:#fff}
-  #status{background:var(--grey);border:1px solid var(--mid);border-radius:14px;padding:16px;display:none;gap:6px;flex-direction:column}
-  #status b{font-size:18px}
-  .live{color:var(--green)} .bad{color:var(--red)}
+  button.ghost{background:var(--grey);color:var(--white);border:1px solid var(--yellow);padding:16px;font-size:18px}
+  #status,#gps{background:var(--grey);border:1px solid var(--mid);border-radius:14px;padding:16px;display:none;gap:6px;flex-direction:column}
+  #status b,#gps b{font-size:18px}
+  #gps{font-size:15px;line-height:1.45}
+  .live,.good{color:var(--green)} .bad,.poor{color:var(--red)} .fair{color:var(--yellow)}
+  a.back{color:var(--yellow);text-align:center;font-weight:700}
 </style>
 </head>
 <body>
 <main>
   <h1>Jozi<span>Lift</span> Driver</h1>
   <p>Keep this page open and the screen on while you drive. Passengers nearby will see your taxi on their map. Tap Stop when you finish.</p>
+  <button class="ghost" id="locBtn" type="button">📍 Turn on location</button>
+  <div id="gps" role="status" aria-live="polite"></div>
   <div><label for="plate">Taxi number plate</label><input id="plate" autocomplete="off" maxlength="20" placeholder="e.g. CA 123 GP"></div>
   <button id="btn">Start sharing my location</button>
-  <div id="status"><b id="state"></b><span id="detail"></span></div>
+  <div id="status" role="status" aria-live="polite"><b id="state"></b><span id="detail"></span></div>
+  <a class="back" href="/">← Home</a>
 </main>
 <script>
 const $ = id => document.getElementById(id);
 let watchId = null, timer = null, wake = null, last = null, sent = 0;
 try { $('plate').value = localStorage.getItem('plate') || ''; } catch (e) {}
 
+// Accuracy rating: how close the GPS thinks it is to your real position
+const rate = a => a <= 30 ? ['good', 'Good'] : a <= 100 ? ['fair', 'Fair'] : ['poor', 'Weak'];
+const tip = 'Move outside or near a window, and switch on GPS / high accuracy in your phone settings.';
+
 function show(text, cls, detail) {
   $('status').style.display = 'flex';
   $('state').textContent = text; $('state').className = cls || '';
   $('detail').textContent = detail || '';
 }
+function gps(title, cls, detail) {
+  const g = $('gps'); g.style.display = 'flex'; g.replaceChildren();
+  const b = document.createElement('b'); b.textContent = title; b.className = cls || '';
+  const d = document.createElement('span'); d.textContent = detail || '';
+  g.append(b, d);
+}
+const blockedHelp = 'Location is blocked for this site. Android (Chrome): tap the lock icon by the address, then Permissions, Location, Allow. iPhone: Settings, Privacy & Security, Location Services, Safari Websites, While Using. Then tap Turn on location again.';
+
+function locError(e) {
+  if (e && e.code === 1) gps('Location is blocked', 'bad', blockedHelp);
+  else gps('Cannot find your GPS yet', 'bad', 'Make sure Location (GPS) is switched on in your phone quick settings. ' + tip);
+}
+
+// Turn on location: asks permission and shows how accurate the GPS is, before you start sharing
+$('locBtn').addEventListener('click', () => {
+  if (!navigator.geolocation) { gps('This phone cannot share location', 'bad', 'Try Chrome or Safari.'); return; }
+  gps('Finding your GPS…', '', 'Allow location when your phone asks.');
+  navigator.geolocation.getCurrentPosition(p => {
+    const [cls, label] = rate(p.coords.accuracy);
+    gps('Location is on. Accuracy: ' + label + ' (about ' + Math.round(p.coords.accuracy) + ' m)', cls, cls === 'good' ? 'You are ready to start sharing.' : tip);
+    $('locBtn').textContent = '📍 Location is on';
+  }, locError, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+});
+
 async function send(body) {
   try { await fetch('/api/update', { method: 'POST', body: JSON.stringify(body) }); return true; }
   catch (e) { return false; }
@@ -53,16 +87,16 @@ async function start() {
   try { wake = await navigator.wakeLock.request('screen'); } catch (e) {}
   watchId = navigator.geolocation.watchPosition(
     p => { last = p; },
-    e => show('Location blocked', 'bad', 'Allow location for this site in your browser settings, then tap Start again.'),
-    { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+    e => { locError(e); show('Not sharing', 'bad', e && e.code === 1 ? 'Location is blocked. See the message above.' : 'Waiting for GPS. See the message above.'); },
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
   );
   timer = setInterval(async () => {
     if (!last) { show('Finding your GPS…', '', 'Stay outside or near a window.'); return; }
-    const c = last.coords;
+    const c = last.coords, [cls, label] = rate(c.accuracy);
     const ok = await send({ id, lat: c.latitude, lng: c.longitude, sp: c.speed });
     if (ok) sent++;
     show(ok ? 'Live: passengers can see you' : 'No signal, retrying…', ok ? 'live' : 'bad',
-      `GPS accuracy ±${Math.round(c.accuracy)} m · Updates sent: ${sent}`);
+      'GPS accuracy: ' + label + ' (about ' + Math.round(c.accuracy) + ' m)' + (cls === 'poor' ? '. ' + tip : '') + ' · Updates sent: ' + sent);
   }, 4000);
   $('btn').textContent = 'Stop sharing'; $('btn').className = 'stop'; $('plate').disabled = true;
 }
