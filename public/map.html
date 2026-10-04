@@ -20,13 +20,18 @@
   .brand{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:500;font:28px 'Bebas Neue',sans-serif;background:rgba(10,10,10,.85);padding:4px 14px;border-radius:99px;border:1px solid var(--mid);color:var(--white);text-decoration:none}
   .brand span{color:var(--yellow)}
   .driverbtn{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);right:14px;z-index:500;background:var(--yellow);color:var(--black);font-weight:700;font-size:14px;padding:10px 16px;border-radius:99px;text-decoration:none}
-  .fabs{position:absolute;right:14px;top:calc(env(safe-area-inset-top,0px) + 130px);z-index:500;display:flex;flex-direction:column;gap:8px}
+  .fabs{position:absolute;right:14px;top:calc(env(safe-area-inset-top,0px) + 182px);z-index:500;display:flex;flex-direction:column;gap:8px}
   .searchwrap{position:absolute;top:calc(env(safe-area-inset-top,0px) + 66px);left:14px;right:14px;max-width:460px;z-index:520}
   .search{display:flex;gap:8px}
   .search input{flex:1;min-width:0;padding:14px 18px;border-radius:99px;border:1px solid var(--mid);background:rgba(23,23,26,.95);color:var(--white);font:500 16px 'DM Sans',sans-serif}
   .search input::placeholder{color:var(--muted)}
   .search input:focus-visible,.search button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   .search button{width:50px;border:0;border-radius:50%;background:var(--yellow);color:var(--black);font-size:20px;cursor:pointer}
+  .chips{display:flex;gap:8px;overflow-x:auto;margin-top:8px;padding-bottom:2px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:none;padding:8px 14px;border-radius:99px;border:1px solid var(--mid);background:rgba(23,23,26,.95);color:var(--white);font:700 13px 'DM Sans',sans-serif;cursor:pointer}
+  .chip:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+  body.big .chip{font-size:16px;padding:10px 16px}
   #sRes{margin-top:8px;display:flex;flex-direction:column;gap:6px}
   #sRes:empty{display:none}
   #sRes .opt{padding:13px 16px;border-radius:14px;border:1px solid var(--mid);background:rgba(23,23,26,.97);color:var(--white);font:500 15px/1.35 'DM Sans',sans-serif;text-align:left;cursor:pointer}
@@ -107,6 +112,7 @@
     <input id="sIn" type="search" placeholder="Type your pickup spot (e.g. Bree Taxi Rank)" aria-label="Type a location" autocomplete="off">
     <button type="submit" aria-label="Search location">🔍</button>
   </form>
+  <div class="chips" id="chips" role="group" aria-label="Popular taxi ranks"></div>
   <div id="sRes" aria-live="polite"></div>
 </div>
 <div class="fabs">
@@ -125,9 +131,9 @@
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// Service area: Johannesburg and surrounds. Keeps commuters on the useful part of the map.
-const AREA = L.latLngBounds([-26.75, 27.55], [-25.55, 28.65]);
-const map = L.map('map', { zoomControl: false, minZoom: 10, maxZoom: 16, maxBounds: AREA, maxBoundsViscosity: 0.8 }).setView([-26.2041, 28.0473], 13);
+// Service area: all of Gauteng (Soweto, Vosloorus, Boksburg, Tembisa, Pretoria and more). Keeps commuters on the useful part of the map.
+const AREA = L.latLngBounds([-26.95, 27.2], [-25.1, 29.0]);
+const map = L.map('map', { zoomControl: false, minZoom: 9, maxZoom: 16, maxBounds: AREA, maxBoundsViscosity: 0.8 }).setView([-26.2041, 28.0473], 13);
 // Clean dark base map with NO place labels (Esri keeps labels in a separate layer we don't load)
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
   maxNativeZoom: 16, maxZoom: 16,
@@ -167,7 +173,7 @@ function onPos(p) {
   else accCircle.setLatLng(me).setRadius(me.acc);
   const [cls, label] = accInfo(me.acc), acc = $('acc');
   acc.hidden = false;
-  if (!AREA.contains(me)) { acc.className = 'acc poor'; acc.textContent = 'You seem to be outside Johannesburg. JoziLift only covers the Johannesburg area for now.'; }
+  if (!AREA.contains(me)) { acc.className = 'acc poor'; acc.textContent = 'You seem to be outside Gauteng. JoziLift only covers Gauteng for now.'; }
   else { acc.className = 'acc ' + cls; acc.textContent = '📡 Your location accuracy: ' + label + ' (about ' + Math.round(me.acc) + ' m)' + (cls === 'poor' ? '. Go outside or switch on GPS / high accuracy for a better fix.' : ''); }
   render();
 }
@@ -219,7 +225,7 @@ function setPin(lat, lng, name) {
   pin = { lat, lng }; pinMode = false; $('bPin').classList.add('on');
   if (pinMarker) map.removeLayer(pinMarker);
   pinMarker = L.marker(pin, { icon: pinIcon, zIndexOffset: 900 }).addTo(map);
-  pinMarker.bindTooltip(name || 'Pickup spot', { permanent: true, direction: 'top', offset: [0, -38], className: 'pinlabel' });
+  pinMarker.bindTooltip((name || 'Pickup spot') + (/coords=1/.test(location.search) ? ' ' + lat.toFixed(5) + ', ' + lng.toFixed(5) : ''), { permanent: true, direction: 'top', offset: [0, -38], className: 'pinlabel' });
   render();
 }
 map.on('click', e => { if (pinMode) setPin(e.latlng.lat, e.latlng.lng); });
@@ -248,6 +254,38 @@ $('sForm').addEventListener('submit', async e => {
   } catch (err) { note('Could not search right now. Check your connection and try again.'); }
 });
 $('sIn').addEventListener('input', () => { if (!$('sIn').value) sRes.replaceChildren(); });
+
+// ---- Popular taxi ranks ----
+// Tapping a rank looks it up on OpenStreetMap. After you confirm a rank on site, open this page with ?coords=1,
+// drop the pin on the rank, and paste the numbers into lat / lng below for exact placement.
+const RANKS = [
+  { name: 'MTN Rank',  q: ['MTN Taxi Rank Johannesburg', 'Martin Street Selby Johannesburg'], lat: null, lng: null },
+  { name: 'Noord',     q: ['Noord Taxi Rank Johannesburg', 'Noord Street Johannesburg CBD'],  lat: null, lng: null },
+  { name: 'Bree',      q: ['Bree Taxi Rank Johannesburg', 'Bree Street Johannesburg CBD'],    lat: null, lng: null },
+  { name: 'Wanderers', q: ['Wanderers Taxi Rank Johannesburg', 'Wanderers Street Johannesburg'], lat: null, lng: null },
+  { name: 'Faraday',   q: ['Faraday Taxi Rank Johannesburg', 'Faraday Station Johannesburg'], lat: null, lng: null },
+  { name: 'Bara',      q: ['Baragwanath Taxi Rank Soweto', 'Bara Taxi Rank Soweto'],          lat: null, lng: null }
+];
+const NOM = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=za&bounded=1&viewbox=27.2,-25.1,29.0,-26.95&q=';
+async function openRank(r) {
+  if (r.lat != null && r.lng != null) { setPin(r.lat, r.lng, r.name); map.flyTo([r.lat, r.lng], 16); sRes.replaceChildren(); return; }
+  note('Finding ' + r.name + ' rank…');
+  try {
+    for (let i = 0; i < r.q.length; i++) {
+      const res = await (await fetch(NOM + encodeURIComponent(r.q[i]))).json();
+      if (res.length) {
+        const x = res[0];
+        setPin(parseFloat(x.lat), parseFloat(x.lon), i === 0 ? r.name + ' Rank' : r.name + ' Rank (approx.)');
+        map.flyTo([x.lat, x.lon], 16); sRes.replaceChildren(); return;
+      }
+    }
+    note('Could not find ' + r.name + ' rank on the map yet. Tap the pin button, then tap the rank on the map.');
+  } catch (err) { note('Could not search right now. Check your connection and try again.'); }
+}
+RANKS.forEach(r => {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = '🚏 ' + r.name;
+  b.onclick = () => openRank(r); $('chips').append(b);
+});
 
 function fit(force) {
   const pts = taxis.map(t => [t.lat, t.lng]);
