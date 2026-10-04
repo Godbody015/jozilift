@@ -66,6 +66,13 @@
   .pinlabel{background:var(--yellow);color:#000;border:2px solid #000;border-radius:99px;font:700 13px 'DM Sans',sans-serif;padding:3px 12px;box-shadow:0 3px 10px rgba(0,0,0,.5)}
   .pinlabel::before{display:none}
   body.big .pinlabel{font-size:17px;padding:5px 14px}
+  .leaflet-tile{background:#0f0f11}
+  .acc{margin-top:8px;font-size:14px;font-weight:700;line-height:1.35}
+  .acc.good{color:var(--green)} .acc.fair{color:var(--yellow)} .acc.poor{color:#ff7b7b}
+  .locask{margin-top:12px;padding:12px 14px;border-radius:14px;border:1px solid var(--yellow);background:var(--black);font-size:15px;line-height:1.45}
+  #locBtn{margin-top:10px;width:100%;padding:14px;border:0;border-radius:12px;background:var(--yellow);color:#000;font:700 16px 'DM Sans',sans-serif;cursor:pointer}
+  #locBtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
+  body.big .acc{font-size:17px} body.big .locask{font-size:18px}
   .leaflet-control-attribution{background:rgba(10,10,10,.7)!important;color:var(--muted)!important}
   .leaflet-control-attribution a{color:var(--muted)!important}
   /* Smooth gliding taxis (like Bolt) instead of jumping every 3s */
@@ -112,14 +119,19 @@
   <div class="handle"></div>
   <div id="title">Looking for taxis…</div>
   <div id="sub">Allow location so we can show what's near you.</div>
+  <div id="acc" class="acc" hidden></div>
+  <div id="locAsk" class="locask" hidden><div id="locMsg"></div><button id="locBtn" type="button">Turn on location</button></div>
   <div id="list"></div>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const map = L.map('map', { zoomControl: false }).setView([-26.2041, 28.0473], 13);
+// Service area: Johannesburg and surrounds. Keeps commuters on the useful part of the map.
+const AREA = L.latLngBounds([-26.75, 27.55], [-25.55, 28.65]);
+const map = L.map('map', { zoomControl: false, minZoom: 10, maxZoom: 16, maxBounds: AREA, maxBoundsViscosity: 0.8 }).setView([-26.2041, 28.0473], 13);
 // Clean dark base map with NO place labels (Esri keeps labels in a separate layer we don't load)
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-  maxNativeZoom: 16, maxZoom: 17, detectRetina: true,
+  maxNativeZoom: 16, maxZoom: 16,
+  errorTileUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Crect width='256' height='256' fill='%230f0f11'/%3E%3C/svg%3E",
   attribution: 'Tiles &copy; Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors'
 }).addTo(map);
 
@@ -140,16 +152,47 @@ const metres = (a, b) => {
 const fmt = m => m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1) + ' km';
 const eta = m => Math.max(1, Math.round(m / (25000 / 60))) + ' min'; // rough estimate at ~25 km/h
 
-if (navigator.geolocation) {
-  navigator.geolocation.watchPosition(p => {
-    me = { lat: p.coords.latitude, lng: p.coords.longitude };
-    if (!meMarker) meMarker = L.marker(me, { icon: meIcon, zIndexOffset: 1000 }).addTo(map); else meMarker.setLatLng(me);
-    render();
-  }, () => { $('sub').textContent = 'Location is blocked. Allow it in your browser settings to see distances.'; },
-  { enableHighAccuracy: true, maximumAge: 3000 });
+// ---- Location: turn on, track, accuracy ----
+let watching = false, accCircle = null;
+const accInfo = a => a <= 30 ? ['good', 'Good'] : a <= 100 ? ['fair', 'Fair'] : ['poor', 'Weak'];
+function showAsk(msg, btn) {
+  $('locAsk').hidden = false; $('locMsg').textContent = msg;
+  $('locBtn').style.display = btn ? 'block' : 'none'; if (btn) $('locBtn').textContent = btn;
 }
+function onPos(p) {
+  $('locAsk').hidden = true;
+  me = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
+  if (!meMarker) meMarker = L.marker(me, { icon: meIcon, zIndexOffset: 1000 }).addTo(map); else meMarker.setLatLng(me);
+  if (!accCircle) accCircle = L.circle(me, { radius: me.acc, color: '#00C853', weight: 1, fillColor: '#00C853', fillOpacity: .12, interactive: false }).addTo(map);
+  else accCircle.setLatLng(me).setRadius(me.acc);
+  const [cls, label] = accInfo(me.acc), acc = $('acc');
+  acc.hidden = false;
+  if (!AREA.contains(me)) { acc.className = 'acc poor'; acc.textContent = 'You seem to be outside Johannesburg. JoziLift only covers the Johannesburg area for now.'; }
+  else { acc.className = 'acc ' + cls; acc.textContent = '📡 Your location accuracy: ' + label + ' (about ' + Math.round(me.acc) + ' m)' + (cls === 'poor' ? '. Go outside or switch on GPS / high accuracy for a better fix.' : ''); }
+  render();
+}
+function onPosErr(err) {
+  watching = false;
+  if (err.code === 1) showAsk('Location is blocked for this site. Android (Chrome): tap the lock icon by the address, then Permissions, Location, Allow. iPhone: Settings, Privacy & Security, Location Services, Safari Websites, While Using. Then tap Try again.', 'Try again');
+  else showAsk('We can\'t find you yet. Make sure Location (GPS) is switched on in your phone\'s quick settings, then tap Try again.', 'Try again');
+}
+function startLocation() {
+  if (!navigator.geolocation) { showAsk('This browser cannot share location. Try Chrome or Safari.', null); return; }
+  if (watching) return; watching = true;
+  navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 });
+}
+async function checkLocation() {
+  if (!navigator.geolocation) { startLocation(); return; }
+  let state = 'prompt';
+  try { const st = await navigator.permissions.query({ name: 'geolocation' }); state = st.state; st.onchange = checkLocation; } catch (e) {}
+  if (state === 'granted') startLocation();
+  else if (state === 'denied') onPosErr({ code: 1 });
+  else showAsk('Turn on location so we can show taxis near you and how far away they are.', 'Turn on location');
+}
+$('locBtn').onclick = () => { watching = false; startLocation(); };
+checkLocation();
 
-$('bMe').onclick = () => me ? map.flyTo([me.lat, me.lng], 16) : ($('sub').textContent = 'Waiting for your location…');
+$('bMe').onclick = () => me ? map.flyTo([me.lat, me.lng], 16) : (watching = false, checkLocation());
 $('bAll').onclick = () => fit(true);
 
 // Big view: ON by default, remembered between visits
