@@ -20,7 +20,7 @@
   .brand{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:500;font:28px 'Bebas Neue',sans-serif;background:rgba(10,10,10,.85);padding:4px 14px;border-radius:99px;border:1px solid var(--mid);color:var(--white);text-decoration:none}
   .brand span{color:var(--yellow)}
   .driverbtn{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);right:14px;z-index:500;background:var(--yellow);color:var(--black);font-weight:700;font-size:14px;padding:10px 16px;border-radius:99px;text-decoration:none}
-  .fabs{position:absolute;right:14px;top:calc(env(safe-area-inset-top,0px) + 130px);z-index:500;display:flex;flex-direction:column;gap:10px}
+  .fabs{position:absolute;right:14px;top:calc(env(safe-area-inset-top,0px) + 130px);z-index:500;display:flex;flex-direction:column;gap:8px}
   .searchwrap{position:absolute;top:calc(env(safe-area-inset-top,0px) + 66px);left:14px;right:14px;max-width:460px;z-index:520}
   .search{display:flex;gap:8px}
   .search input{flex:1;min-width:0;padding:14px 18px;border-radius:99px;border:1px solid var(--mid);background:rgba(23,23,26,.95);color:var(--white);font:500 16px 'DM Sans',sans-serif}
@@ -35,7 +35,13 @@
   body.big .search input{font-size:20px;padding:16px 20px}
   body.big .search button{width:58px;font-size:24px}
   body.big #sRes .opt{font-size:19px;padding:16px}
-  .fab{width:48px;height:48px;border-radius:50%;border:1px solid var(--mid);background:rgba(23,23,26,.92);color:var(--white);font-size:20px;cursor:pointer}
+  .fab{width:40px;height:40px;border-radius:50%;border:1px solid var(--mid);background:rgba(23,23,26,.92);color:var(--white);font-size:17px;line-height:1;cursor:pointer}
+  .medot{display:block;width:14px;height:14px;margin:auto;border-radius:50%;background:var(--green);border:2px solid #fff;box-shadow:0 0 0 4px rgba(0,200,83,.25)}
+  .minipin{display:block;width:14px;height:14px;margin:auto;background:var(--yellow);border:2px solid #000;border-radius:50% 50% 50% 0;transform:rotate(-45deg) translate(1px,-1px)}
+  .minipin::after{content:'';display:block;width:4px;height:4px;background:#000;border-radius:50%;margin:3px}
+  .fab.on .minipin{background:#000}
+  .fab.on .minipin::after{background:var(--yellow)}
+  .fab.txt{font:700 13px 'DM Sans',sans-serif;letter-spacing:-.5px}
   .fab.on{background:var(--yellow);color:var(--black);border-color:var(--yellow)}
   .fab:focus-visible,.row:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   .sheet{position:absolute;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);z-index:500;max-width:460px;margin:auto;background:rgba(23,23,26,.96);border:1px solid var(--mid);border-radius:20px;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
@@ -76,7 +82,8 @@
   body.big #sub{font-size:19px;color:var(--white);line-height:1.4}
   body.big .row{font-size:19px;padding:16px}
   body.big .row small{color:var(--white);font-size:16px}
-  body.big .fab{width:60px;height:60px;font-size:26px;border-width:2px;border-color:var(--white)}
+  body.big .fab{width:44px;height:44px;font-size:19px;border-color:var(--white)}
+  body.big .fab.txt{font-size:15px}
   body.big .brand,body.big .driverbtn{font-size:inherit}
   body.big .driverbtn{font-size:17px;padding:12px 18px}
   body.big .leaflet-control-attribution{font-size:11px}
@@ -96,11 +103,10 @@
   <div id="sRes" aria-live="polite"></div>
 </div>
 <div class="fabs">
-  <button class="fab" id="bMe" aria-label="Centre on my location">📍</button>
-  <button class="fab" id="bAll" aria-label="Show all taxis">🌍</button>
-  <button class="fab" id="bPin" aria-label="Drop a pickup pin">📌</button>
-  <button class="fab" id="bBig" aria-label="Toggle big high-contrast view" aria-pressed="true">👁️</button>
-  <button class="fab" id="bSay" aria-label="Read out nearest taxi">🔊</button>
+  <button class="fab" id="bMe" title="My location" aria-label="Centre on my location"><span class="medot"></span></button>
+  <button class="fab" id="bAll" title="Show all taxis" aria-label="Show all taxis">🚕</button>
+  <button class="fab" id="bPin" title="Pickup pin" aria-label="Drop a pickup pin"><span class="minipin"></span></button>
+  <button class="fab txt" id="bBig" title="Big view" aria-label="Toggle big high-contrast view" aria-pressed="true">Aa</button>
 </div>
 <div class="sheet" role="status" aria-live="polite">
   <div class="handle"></div>
@@ -157,12 +163,6 @@ let startBig = true; try { startBig = localStorage.getItem('bigView') !== '0'; }
 setBig(startBig);
 $('bBig').onclick = () => setBig(!document.body.classList.contains('big'));
 
-// Voice: reads the nearest taxi out loud
-$('bSay').onclick = () => {
-  if (!('speechSynthesis' in window)) { $('sub').textContent = 'Voice is not supported on this device.'; return; }
-  speechSynthesis.cancel();
-  speechSynthesis.speak(new SpeechSynthesisUtterance($('title').textContent + '. ' + $('sub').textContent));
-};
 
 // Stop taxis gliding while the map zooms
 map.on('zoomstart', () => document.body.classList.add('nomove'));
