@@ -63,6 +63,14 @@
   .taxi::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--yellow);animation:pulse 2s ease-out infinite}
   .near .taxi{box-shadow:0 0 0 6px rgba(255,208,0,.25),0 4px 14px rgba(0,0,0,.6)}
   .tag{display:none;position:absolute;top:-24px;left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--black);color:var(--yellow);font:700 11px 'DM Sans',sans-serif;padding:2px 8px;border-radius:99px;border:1px solid var(--mid)}
+  /* Number plate shown under each taxi so commuters can match the van in front of them */
+  .plate{position:absolute;top:100%;left:50%;transform:translate(-50%,5px);white-space:nowrap;background:var(--white);color:#000;font:700 11px 'DM Sans',sans-serif;letter-spacing:.6px;padding:1px 7px;border-radius:5px;border:2px solid #000;box-shadow:0 2px 6px rgba(0,0,0,.5);z-index:2}
+  .plate:empty{display:none}
+  body.big .plate{font-size:12px}
+  /* Taxi that stopped updating (driver switched apps): faded, no pulse, so nobody mistakes it for live */
+  .stale .taxi{opacity:.45;filter:grayscale(.7);box-shadow:none}
+  .stale .taxi::after,.stale .taxi::before{display:none}
+  .stale .plate{opacity:.6}
   @keyframes pulse{0%{transform:scale(1);opacity:.8}100%{transform:scale(1.9);opacity:0}}
   .me{width:18px;height:18px;border-radius:50%;background:var(--green);border:3px solid var(--black);box-shadow:0 0 0 8px rgba(0,200,83,.25)}
   .pinwrap{width:30px;height:34px}
@@ -144,7 +152,8 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_D
 const $ = id => document.getElementById(id);
 const meIcon = L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
 const pinIcon = L.divIcon({ className: '', html: '<div class="pinwrap"><div class="pin"></div></div>', iconSize: [30, 34], iconAnchor: [15, 34] });
-const taxiIcon = L.divIcon({ className: '', html: '<div class="taxi">🚕<span class="tag"></span></div>', iconSize: [38, 38], iconAnchor: [19, 19] });
+// The .plate span is filled in render() from the plate each driver registered
+const taxiIcon = L.divIcon({ className: '', html: '<div class="taxi">🚕<span class="tag"></span><span class="plate"></span></div>', iconSize: [38, 38], iconAnchor: [19, 19] });
 
 let me = null, meMarker = null, pin = null, pinMarker = null, pinMode = false, fitted = false, taxis = [];
 const markers = new Map();
@@ -157,6 +166,8 @@ const metres = (a, b) => {
 };
 const fmt = m => m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1) + ' km';
 const eta = m => Math.max(1, Math.round(m / (25000 / 60))) + ' min'; // rough estimate at ~25 km/h
+const LIVE_MS = 20000; // no update for 20s = shown as "last seen", not live
+const fmtAge = ms => { const s = Math.round((ms || 0) / 1000); return s < 60 ? s + 's ago' : Math.round(s / 60) + ' min ago'; };
 
 // ---- Location: turn on, track, accuracy ----
 let watching = false, accCircle = null;
@@ -296,30 +307,40 @@ function fit(force) {
 
 function render() {
   const target = pin || me, label = pin ? 'your pickup pin' : 'you';
+  const isLive = t => (t.age || 0) <= LIVE_MS;
   const list = taxis.map(t => ({ ...t, d: target ? metres(target, t) : null }));
   if (target) list.sort((a, b) => a.d - b.d);
-  const near = target && list.length ? list[0] : null;
+  list.sort((a, b) => isLive(b) - isLive(a)); // live taxis first, faded ones after
+  const liveCount = list.filter(isLive).length;
+  const near = target && liveCount ? list[0] : null;
+  const byId = new Map(taxis.map(t => [t.id, t]));
 
   for (const [id, m] of markers) {
     const el = m.getElement(); if (!el) continue;
     const isNear = !!near && near.id === id;
     el.classList.toggle('near', isNear);
+    const tx = byId.get(id);
+    el.classList.toggle('stale', !!tx && !isLive(tx));
     const tag = el.querySelector('.tag');
     if (tag) { tag.textContent = isNear ? fmt(near.d) : ''; tag.style.display = isNear ? 'block' : 'none'; }
+    // Number plate under the taxi (textContent keeps it safe from injected HTML)
+    const pl = el.querySelector('.plate');
+    if (pl) pl.textContent = (byId.get(id) || {}).plate || '';
   }
   line.setLatLngs(near ? [[near.lat, near.lng], [target.lat, target.lng]] : []);
 
-  $('title').textContent = list.length ? list.length + (list.length === 1 ? ' taxi live' : ' taxis live') : 'No taxis live right now';
-  $('sub').textContent = !list.length ? 'This updates on its own when a driver starts sharing.'
+  $('title').textContent = liveCount ? liveCount + (liveCount === 1 ? ' taxi live' : ' taxis live') : 'No taxis live right now';
+  $('sub').textContent = !liveCount ? 'This updates on its own when a driver starts sharing.'
     : near ? 'Nearest is ' + fmt(near.d) + ' from ' + label + ' · about ' + eta(near.d) + ' (estimate)'
     : 'Allow location to see how far they are.';
 
   const box = $('list'); box.replaceChildren();
   list.forEach((t, i) => {
     const b = document.createElement('button'); b.className = 'row' + (i === 0 && near ? ' first' : '');
-    const name = document.createElement('span'); name.textContent = '🚕 ' + t.id;
+    const name = document.createElement('span'); name.textContent = '🚕 ' + (t.plate || t.id);
     const info = document.createElement('small');
-    info.textContent = (t.d != null ? fmt(t.d) + ' · ' : '') + Math.max(0, Math.round((t.age || 0) / 1000)) + 's ago';
+    info.textContent = (t.d != null ? fmt(t.d) + ' · ' : '') + (isLive(t) ? Math.max(0, Math.round((t.age || 0) / 1000)) + 's ago' : 'last seen ' + fmtAge(t.age));
+    if (!isLive(t)) b.style.opacity = '.6';
     b.append(name, info); b.onclick = () => map.flyTo([t.lat, t.lng], 16); box.append(b);
   });
 }
