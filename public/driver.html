@@ -3,297 +3,265 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>JoziLift Map: Find it. Stop it. Ride it.</title>
+<title>JoziLift Driver: Share your taxi live</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  :root{--black:#0a0a0a;--yellow:#FFD000;--green:#00C853;--white:#f5f5f0;--grey:#17171a;--mid:#2c2c30;--muted:#9a9aa0}
+  :root{--black:#0a0a0a;--yellow:#FFD000;--green:#00C853;--red:#FF3B30;--white:#f5f5f0;--grey:#17171a;--mid:#2c2c30;--muted:#9a9aa0}
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;background:var(--black);color:var(--white);font-family:'DM Sans',sans-serif;overflow:hidden}
-  #map{position:absolute;inset:0;background:#0f0f11}
-  /* Base map is already dark and label-free, so no filter is needed (filters made it look soft) */
-  .leaflet-container{font-family:'DM Sans',sans-serif;cursor:grab}
-  /* Soft vignette so UI floats over the map like the home page skyline */
-  .fade{position:absolute;left:0;right:0;z-index:400;pointer-events:none}
-  .fade.top{top:0;height:130px;background:linear-gradient(rgba(10,10,10,.9),transparent)}
-  .fade.bot{bottom:0;height:300px;background:linear-gradient(transparent,rgba(10,10,10,.92))}
-  .brand{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:500;font:28px 'Bebas Neue',sans-serif;background:rgba(10,10,10,.85);padding:4px 14px;border-radius:99px;border:1px solid var(--mid);color:var(--white);text-decoration:none}
+  html,body{min-height:100%;background:var(--black);color:var(--white);font-family:'DM Sans',sans-serif}
+  body{padding:calc(env(safe-area-inset-top,0px) + 16px) 18px calc(env(safe-area-inset-bottom,0px) + 28px)}
+  .wrap{max-width:440px;margin:0 auto}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .brand{font:28px 'Bebas Neue',sans-serif;color:var(--white);text-decoration:none}
   .brand span{color:var(--yellow)}
-  .driverbtn{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);right:14px;z-index:500;background:var(--yellow);color:var(--black);font-weight:700;font-size:14px;padding:10px 16px;border-radius:99px;text-decoration:none}
-  .fabs{position:absolute;right:14px;top:calc(env(safe-area-inset-top,0px) + 130px);z-index:500;display:flex;flex-direction:column;gap:8px}
-  .searchwrap{position:absolute;top:calc(env(safe-area-inset-top,0px) + 66px);left:14px;right:14px;max-width:460px;z-index:520}
-  .search{display:flex;gap:8px}
-  .search input{flex:1;min-width:0;padding:14px 18px;border-radius:99px;border:1px solid var(--mid);background:rgba(23,23,26,.95);color:var(--white);font:500 16px 'DM Sans',sans-serif}
-  .search input::placeholder{color:var(--muted)}
-  .search input:focus-visible,.search button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
-  .search button{width:50px;border:0;border-radius:50%;background:var(--yellow);color:var(--black);font-size:20px;cursor:pointer}
-  #sRes{margin-top:8px;display:flex;flex-direction:column;gap:6px}
-  #sRes:empty{display:none}
-  #sRes .opt{padding:13px 16px;border-radius:14px;border:1px solid var(--mid);background:rgba(23,23,26,.97);color:var(--white);font:500 15px/1.35 'DM Sans',sans-serif;text-align:left;cursor:pointer}
-  #sRes .opt:focus-visible{outline:3px solid var(--yellow)}
-  #sRes .msg{padding:12px 16px;border-radius:14px;background:rgba(23,23,26,.97);border:1px solid var(--mid);color:var(--muted);font-size:15px}
-  body.big .search input{font-size:20px;padding:16px 20px}
-  body.big .search button{width:58px;font-size:24px}
-  body.big #sRes .opt{font-size:19px;padding:16px}
-  .fab{width:40px;height:40px;border-radius:50%;border:1px solid var(--mid);background:rgba(23,23,26,.92);color:var(--white);font-size:17px;line-height:1;cursor:pointer}
-  .medot{display:block;width:14px;height:14px;margin:auto;border-radius:50%;background:var(--green);border:2px solid #fff;box-shadow:0 0 0 4px rgba(0,200,83,.25)}
-  .minipin{display:block;width:14px;height:14px;margin:auto;background:var(--yellow);border:2px solid #000;border-radius:50% 50% 50% 0;transform:rotate(-45deg) translate(1px,-1px)}
-  .minipin::after{content:'';display:block;width:4px;height:4px;background:#000;border-radius:50%;margin:3px}
-  .fab.on .minipin{background:#000}
-  .fab.on .minipin::after{background:var(--yellow)}
-  .fab.txt{font:700 13px 'DM Sans',sans-serif;letter-spacing:-.5px}
-  .fab.on{background:var(--yellow);color:var(--black);border-color:var(--yellow)}
-  .fab:focus-visible,.row:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
-  .sheet{position:absolute;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);z-index:500;max-width:460px;margin:auto;background:rgba(23,23,26,.96);border:1px solid var(--mid);border-radius:20px;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
-  .handle{width:36px;height:4px;border-radius:2px;background:var(--mid);margin:-4px auto 10px}
-  #title{font-weight:700;font-size:20px}
-  #sub{color:var(--muted);margin-top:4px;font-size:15px}
-  #list{margin-top:10px;max-height:26vh;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
-  #list:empty{display:none}
-  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:12px 14px;border:1px solid var(--mid);border-radius:12px;background:var(--black);color:var(--white);font:700 15px 'DM Sans',sans-serif;cursor:pointer;text-align:left}
-  .row small{color:var(--muted);font-weight:500}
-  .row.first{border-color:var(--yellow)}
-  /* Markers */
-  .taxi{position:relative;width:38px;height:38px;border-radius:50%;background:var(--yellow);border:3px solid var(--black);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.6)}
-  .taxi::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--yellow);animation:pulse 2s ease-out infinite}
-  .near .taxi{box-shadow:0 0 0 6px rgba(255,208,0,.25),0 4px 14px rgba(0,0,0,.6)}
-  .tag{display:none;position:absolute;top:-24px;left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--black);color:var(--yellow);font:700 11px 'DM Sans',sans-serif;padding:2px 8px;border-radius:99px;border:1px solid var(--mid)}
-  /* Number plate shown under each taxi so commuters can match the van in front of them */
-  .plate{position:absolute;top:100%;left:50%;transform:translate(-50%,5px);white-space:nowrap;background:var(--white);color:#000;font:700 11px 'DM Sans',sans-serif;letter-spacing:.6px;padding:1px 7px;border-radius:5px;border:2px solid #000;box-shadow:0 2px 6px rgba(0,0,0,.5);z-index:2}
-  .plate:empty{display:none}
-  body.big .plate{font-size:12px}
-  @keyframes pulse{0%{transform:scale(1);opacity:.8}100%{transform:scale(1.9);opacity:0}}
-  .me{width:18px;height:18px;border-radius:50%;background:var(--green);border:3px solid var(--black);box-shadow:0 0 0 8px rgba(0,200,83,.25)}
-  .pinwrap{width:30px;height:34px}
-  .pin{width:28px;height:28px;background:var(--yellow);border:3px solid var(--black);border-radius:50% 50% 50% 0;transform:rotate(-45deg);margin:0 1px;box-shadow:0 4px 10px rgba(0,0,0,.6)}
-  .pin::after{content:'';display:block;width:8px;height:8px;background:var(--black);border-radius:50%;margin:7px}
-  .pinlabel{background:var(--yellow);color:#000;border:2px solid #000;border-radius:99px;font:700 13px 'DM Sans',sans-serif;padding:3px 12px;box-shadow:0 3px 10px rgba(0,0,0,.5)}
-  .pinlabel::before{display:none}
-  body.big .pinlabel{font-size:17px;padding:5px 14px}
-  .leaflet-tile{background:#0f0f11}
-  .acc{margin-top:8px;font-size:14px;font-weight:700;line-height:1.35}
-  .acc.good{color:var(--green)} .acc.fair{color:var(--yellow)} .acc.poor{color:#ff7b7b}
-  .locask{margin-top:12px;padding:12px 14px;border-radius:14px;border:1px solid var(--yellow);background:var(--black);font-size:15px;line-height:1.45}
-  #locBtn{margin-top:10px;width:100%;padding:14px;border:0;border-radius:12px;background:var(--yellow);color:#000;font:700 16px 'DM Sans',sans-serif;cursor:pointer}
-  #locBtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
-  body.big .acc{font-size:17px} body.big .locask{font-size:18px}
-  .leaflet-control-attribution{background:rgba(10,10,10,.7)!important;color:var(--muted)!important}
-  .leaflet-control-attribution a{color:var(--muted)!important}
-  /* Smooth gliding taxis (like Bolt) instead of jumping every 3s */
-  .leaflet-marker-icon{transition:transform 3s linear}
-  .nomove .leaflet-marker-icon{transition:none!important}
-  .taxi::before{content:'';position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--yellow);animation:pulse 2s ease-out 1s infinite}
-  /* BIG VIEW: larger, higher contrast, easier to see */
-  body.big .leaflet-tile-pane{filter:brightness(1.35) contrast(1.1)}
-  body.big .taxi{transform:scale(1.7);border-color:#fff;border-width:4px;box-shadow:0 0 0 5px #000,0 0 22px 6px rgba(255,208,0,.8)}
-  body.big .me{transform:scale(1.8)}
-  body.big .pinwrap{transform:scale(1.7);transform-origin:50% 100%}
-  body.big .tag{font-size:15px;top:-34px;padding:4px 12px;color:#000;background:var(--yellow);border-color:#000}
-  body.big #title{font-size:28px}
-  body.big #sub{font-size:19px;color:var(--white);line-height:1.4}
-  body.big .row{font-size:19px;padding:16px}
-  body.big .row small{color:var(--white);font-size:16px}
-  body.big .fab{width:44px;height:44px;font-size:19px;border-color:var(--white)}
-  body.big .fab.txt{font-size:15px}
-  body.big .brand,body.big .driverbtn{font-size:inherit}
-  body.big .driverbtn{font-size:17px;padding:12px 18px}
-  body.big .leaflet-control-attribution{font-size:11px}
-  @media (prefers-reduced-motion:reduce){.taxi::after,.taxi::before{animation:none}.leaflet-marker-icon{transition:none}}
+  .mapbtn{font-size:14px;font-weight:700;color:var(--white);text-decoration:none;padding:9px 14px;border-radius:99px;border:1px solid var(--mid)}
+  .road{height:3px;margin:14px 0 22px;background-image:repeating-linear-gradient(90deg,var(--yellow) 0 16px,transparent 16px 26px);border-radius:2px}
+  h1{font:400 clamp(40px,11vw,54px)/1 'Bebas Neue',sans-serif;letter-spacing:.5px}
+  h1 span{color:var(--yellow)}
+  .lead{color:var(--muted);font-size:17px;line-height:1.5;margin-top:10px}
+  .card{margin-top:22px;background:var(--grey);border:1px solid var(--mid);border-radius:20px;padding:20px}
+  label{display:block;font-weight:700;font-size:17px}
+  .hint{color:var(--muted);font-size:14px;margin-top:4px;line-height:1.4}
+  #plate{width:100%;margin-top:12px;padding:16px;border-radius:14px;border:2px solid var(--mid);background:var(--black);color:var(--white);font:700 26px 'DM Sans',sans-serif;letter-spacing:2px;text-align:center;text-transform:uppercase}
+  #plate::placeholder{color:#55555b;letter-spacing:2px}
+  #plate:focus-visible{outline:3px solid var(--yellow);outline-offset:2px;border-color:var(--yellow)}
+  #plate.bad{border-color:var(--red)}
+  #plate:disabled{opacity:.6}
+  .err{color:#ff7b7b;font-weight:700;font-size:15px;margin-top:10px}
+  .err[hidden]{display:none}
+  .go{display:block;width:100%;margin-top:18px;padding:22px;border:0;border-radius:18px;font:700 22px 'DM Sans',sans-serif;cursor:pointer;background:var(--yellow);color:#000}
+  .go.stop{background:var(--mid);color:var(--white)}
+  .go:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  .go:active{transform:scale(.98)}
+  .status{margin-top:22px;border-radius:20px;border:1px solid var(--mid);background:var(--grey);padding:18px 20px}
+  .status[hidden]{display:none}
+  .pill{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:19px}
+  .dot{width:12px;height:12px;border-radius:50%;background:var(--muted)}
+  .live .dot{background:var(--green);box-shadow:0 0 0 5px rgba(0,200,83,.25);animation:pulse 1.8s ease-in-out infinite}
+  .warn .dot{background:var(--yellow)}
+  .fail .dot{background:var(--red)}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 5px rgba(0,200,83,.25)}50%{box-shadow:0 0 0 9px rgba(0,200,83,.08)}}
+  .rows{margin-top:14px;display:grid;gap:10px}
+  .r{display:flex;justify-content:space-between;gap:12px;font-size:16px}
+  .r span:first-child{color:var(--muted)}
+  .r b{text-align:right}
+  .good{color:var(--green)} .fair{color:var(--yellow)} .poor{color:#ff7b7b}
+  .note{margin-top:16px;font-size:15px;line-height:1.5;color:var(--white)}
+  .note.m{color:var(--muted)}
+  .ask{margin-top:14px;padding:14px;border-radius:14px;border:1px solid var(--yellow);background:var(--black);font-size:16px;line-height:1.5}
+  .ask[hidden]{display:none}
+  ol{margin:16px 0 0 20px;color:var(--muted);font-size:15px;line-height:1.7}
+  @media (prefers-reduced-motion:reduce){.live .dot{animation:none}}
 </style>
 </head>
 <body>
-<div id="map"></div>
-<div class="fade top"></div><div class="fade bot"></div>
-<a class="brand" href="/" aria-label="JoziLift home">Jozi<span>Lift</span></a>
-<a class="driverbtn" href="/driver.html">I'm a driver 🚕</a>
-<div class="searchwrap">
-  <form class="search" id="sForm" role="search">
-    <input id="sIn" type="search" placeholder="Type your pickup spot (e.g. Bree Taxi Rank)" aria-label="Type a location" autocomplete="off">
-    <button type="submit" aria-label="Search location">🔍</button>
-  </form>
-  <div id="sRes" aria-live="polite"></div>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="/" aria-label="JoziLift home">Jozi<span>Lift</span></a>
+    <a class="mapbtn" href="/map.html">See the map</a>
+  </div>
+  <div class="road"></div>
+
+  <h1>Share your <span>taxi</span></h1>
+  <p class="lead">Passengers near you can see your taxi on the map and find you faster. Free to use.</p>
+
+  <div class="card">
+    <label for="plate">Your number plate</label>
+    <div class="hint">Passengers use it to spot your taxi. Example: HIM 007 GP</div>
+    <input id="plate" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="12" placeholder="ABC 123 GP" aria-describedby="plateErr">
+    <div class="err" id="plateErr" role="alert" hidden></div>
+    <button class="go" id="go" type="button">Start sharing</button>
+    <ol id="steps">
+      <li>Type your number plate.</li>
+      <li>Tap Start sharing and allow location.</li>
+      <li>Leave this page open on your phone holder. If you switch to another app, passengers see your taxi as "last seen" until you come back.</li>
+    </ol>
+  </div>
+
+  <div class="status" id="status" hidden role="status" aria-live="polite">
+    <div class="pill" id="pill"><i class="dot"></i><span id="pillText">Starting…</span></div>
+    <div class="rows">
+      <div class="r"><span>Plate</span><b id="rPlate">-</b></div>
+      <div class="r"><span>GPS signal</span><b id="rAcc">Finding you…</b></div>
+      <div class="r"><span>Last update</span><b id="rSent">-</b></div>
+    </div>
+    <div class="ask" id="ask" hidden></div>
+    <p class="note m" id="wakeNote"></p>
+  </div>
 </div>
-<div class="fabs">
-  <button class="fab" id="bMe" title="My location" aria-label="Centre on my location"><span class="medot"></span></button>
-  <button class="fab" id="bAll" title="Show all taxis" aria-label="Show all taxis">🚕</button>
-  <button class="fab" id="bPin" title="Pickup pin" aria-label="Drop a pickup pin"><span class="minipin"></span></button>
-  <button class="fab txt" id="bBig" title="Big view" aria-label="Toggle big high-contrast view" aria-pressed="true">Aa</button>
-</div>
-<div class="sheet" role="status" aria-live="polite">
-  <div class="handle"></div>
-  <div id="title">Looking for taxis…</div>
-  <div id="sub">Allow location so we can show what's near you.</div>
-  <div id="acc" class="acc" hidden></div>
-  <div id="locAsk" class="locask" hidden><div id="locMsg"></div><button id="locBtn" type="button">Turn on location</button></div>
-  <div id="list"></div>
-</div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-// Service area: Johannesburg and surrounds. Keeps commuters on the useful part of the map.
-const AREA = L.latLngBounds([-26.75, 27.55], [-25.55, 28.65]);
-const map = L.map('map', { zoomControl: false, minZoom: 10, maxZoom: 16, maxBounds: AREA, maxBoundsViscosity: 0.8 }).setView([-26.2041, 28.0473], 13);
-// Clean dark base map with NO place labels (Esri keeps labels in a separate layer we don't load)
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-  maxNativeZoom: 16, maxZoom: 16,
-  errorTileUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Crect width='256' height='256' fill='%230f0f11'/%3E%3C/svg%3E",
-  attribution: 'Tiles &copy; Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors'
-}).addTo(map);
+// ---- Settings ----
+const API = '/api/update';      // where your position is sent (POST, JSON)
+const SEND_EVERY = 3000;          // send every 3 seconds, same rhythm the map refreshes
+const STALE_MS = 10000;           // if GPS has been silent this long, stop sending (avoids showing a stuck taxi)
+
 const $ = id => document.getElementById(id);
-const meIcon = L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
-const pinIcon = L.divIcon({ className: '', html: '<div class="pinwrap"><div class="pin"></div></div>', iconSize: [30, 34], iconAnchor: [15, 34] });
-// The .plate span is filled in render() from the plate each driver registered
-const taxiIcon = L.divIcon({ className: '', html: '<div class="taxi">🚕<span class="tag"></span><span class="plate"></span></div>', iconSize: [38, 38], iconAnchor: [19, 19] });
-let me = null, meMarker = null, pin = null, pinMarker = null, pinMode = false, fitted = false, taxis = [];
-const markers = new Map();
-const line = L.polyline([], { color: '#FFD000', weight: 3, dashArray: '2 8', lineCap: 'round', opacity: .9 }).addTo(map);
-const metres = (a, b) => {
-  const R = 6371000, r = x => x * Math.PI / 180, dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-};
-const fmt = m => m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1) + ' km';
-const eta = m => Math.max(1, Math.round(m / (25000 / 60))) + ' min'; // rough estimate at ~25 km/h
-// ---- Location: turn on, track, accuracy ----
-let watching = false, accCircle = null;
-const accInfo = a => a <= 30 ? ['good', 'Good'] : a <= 100 ? ['fair', 'Fair'] : ['poor', 'Weak'];
-function showAsk(msg, btn) {
-  $('locAsk').hidden = false; $('locMsg').textContent = msg;
-  $('locBtn').style.display = btn ? 'block' : 'none'; if (btn) $('locBtn').textContent = btn;
-}
-function onPos(p) {
-  $('locAsk').hidden = true;
-  me = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
-  if (!meMarker) meMarker = L.marker(me, { icon: meIcon, zIndexOffset: 1000 }).addTo(map); else meMarker.setLatLng(me);
-  if (!accCircle) accCircle = L.circle(me, { radius: me.acc, color: '#00C853', weight: 1, fillColor: '#00C853', fillOpacity: .12, interactive: false }).addTo(map);
-  else accCircle.setLatLng(me).setRadius(me.acc);
-  const [cls, label] = accInfo(me.acc), acc = $('acc');
-  acc.hidden = false;
-  if (!AREA.contains(me)) { acc.className = 'acc poor'; acc.textContent = 'You seem to be outside Johannesburg. JoziLift only covers the Johannesburg area for now.'; }
-  else { acc.className = 'acc ' + cls; acc.textContent = '📡 Your location accuracy: ' + label + ' (about ' + Math.round(me.acc) + ' m)' + (cls === 'poor' ? '. Go outside or switch on GPS / high accuracy for a better fix.' : ''); }
-  render();
-}
-function onPosErr(err) {
-  watching = false;
-  if (err.code === 1) showAsk('Location is blocked for this site. Android (Chrome): tap the lock icon by the address, then Permissions, Location, Allow. iPhone: Settings, Privacy & Security, Location Services, Safari Websites, While Using. Then tap Try again.', 'Try again');
-  else showAsk('We can\'t find you yet. Make sure Location (GPS) is switched on in your phone\'s quick settings, then tap Try again.', 'Try again');
-}
-function startLocation() {
-  if (!navigator.geolocation) { showAsk('This browser cannot share location. Try Chrome or Safari.', null); return; }
-  if (watching) return; watching = true;
-  navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 });
-}
-async function checkLocation() {
-  if (!navigator.geolocation) { startLocation(); return; }
-  let state = 'prompt';
-  try { const st = await navigator.permissions.query({ name: 'geolocation' }); state = st.state; st.onchange = checkLocation; } catch (e) {}
-  if (state === 'granted') startLocation();
-  else if (state === 'denied') onPosErr({ code: 1 });
-  else showAsk('Turn on location so we can show taxis near you and how far away they are.', 'Turn on location');
-}
-$('locBtn').onclick = () => { watching = false; startLocation(); };
-checkLocation();
-$('bMe').onclick = () => me ? map.flyTo([me.lat, me.lng], 16) : (watching = false, checkLocation());
-$('bAll').onclick = () => fit(true);
-// Big view: ON by default, remembered between visits
-function setBig(on) {
-  document.body.classList.toggle('big', on);
-  $('bBig').classList.toggle('on', on); $('bBig').setAttribute('aria-pressed', on);
-  line.setStyle({ weight: on ? 6 : 3, dashArray: on ? '1 12' : '2 8' });
-  try { localStorage.setItem('bigView', on ? '1' : '0'); } catch (e) {}
-}
-let startBig = true; try { startBig = localStorage.getItem('bigView') !== '0'; } catch (e) {}
-setBig(startBig);
-$('bBig').onclick = () => setBig(!document.body.classList.contains('big'));
-// Stop taxis gliding while the map zooms
-map.on('zoomstart', () => document.body.classList.add('nomove'));
-map.on('zoomend', () => setTimeout(() => document.body.classList.remove('nomove'), 150));
-$('bPin').onclick = () => {
-  if (pin) { pin = null; map.removeLayer(pinMarker); pinMarker = null; $('bPin').classList.remove('on'); render(); return; }
-  pinMode = !pinMode; $('bPin').classList.toggle('on', pinMode);
-  if (pinMode) $('sub').textContent = 'Tap the map where you want to be picked up.';
-};
-function setPin(lat, lng, name) {
-  pin = { lat, lng }; pinMode = false; $('bPin').classList.add('on');
-  if (pinMarker) map.removeLayer(pinMarker);
-  pinMarker = L.marker(pin, { icon: pinIcon, zIndexOffset: 900 }).addTo(map);
-  pinMarker.bindTooltip(name || 'Pickup spot', { permanent: true, direction: 'top', offset: [0, -38], className: 'pinlabel' });
-  render();
-}
-map.on('click', e => { if (pinMode) setPin(e.latlng.lat, e.latlng.lng); });
-// Type a location: search OpenStreetMap (Nominatim), biased to Johannesburg
-const sRes = $('sRes');
-const note = text => { sRes.replaceChildren(); const d = document.createElement('div'); d.className = 'msg'; d.textContent = text; sRes.append(d); };
-$('sForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  const q = $('sIn').value.trim(); if (!q) return;
-  note('Searching…');
+const plateEl = $('plate'), goBtn = $('go');
+
+// A permanent ID for this phone, so your taxi keeps one dot on the map
+let memId = null;
+function getId() {
   try {
-    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=za&viewbox=27.7,-25.9,28.4,-26.5&q=' + encodeURIComponent(q);
-    const res = await (await fetch(url, { headers: { 'Accept': 'application/json' } })).json();
-    if (!res.length) { note('No places found. Try adding the suburb, e.g. "Bree Street, Johannesburg".'); return; }
-    sRes.replaceChildren();
-    res.forEach(r => {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'opt';
-      b.textContent = r.display_name.split(',').slice(0, 3).join(',');
-      b.onclick = () => {
-        setPin(parseFloat(r.lat), parseFloat(r.lon), r.display_name.split(',')[0]);
-        map.flyTo([r.lat, r.lon], 16); sRes.replaceChildren(); $('sIn').blur();
-      };
-      sRes.append(b);
-    });
-  } catch (err) { note('Could not search right now. Check your connection and try again.'); }
+    let id = localStorage.getItem('jl_driver_id');
+    if (!id) { id = 'JL-' + Math.random().toString(36).slice(2, 8).toUpperCase(); localStorage.setItem('jl_driver_id', id); }
+    return id;
+  } catch (e) { return memId || (memId = 'JL-' + Math.random().toString(36).slice(2, 8).toUpperCase()); }
+}
+const ID = getId();
+
+// ---- Number plate ----
+try { plateEl.value = localStorage.getItem('jl_plate') || ''; } catch (e) {}
+plateEl.addEventListener('input', () => {
+  plateEl.value = plateEl.value.toUpperCase().replace(/[^A-Z0-9 ]/g, '');
+  plateEl.classList.remove('bad'); $('plateErr').hidden = true;
 });
-$('sIn').addEventListener('input', () => { if (!$('sIn').value) sRes.replaceChildren(); });
-function fit(force) {
-  const pts = taxis.map(t => [t.lat, t.lng]);
-  if (me) pts.push([me.lat, me.lng]);
-  if (pin) pts.push([pin.lat, pin.lng]);
-  if (pts.length && (force || !fitted)) { map.fitBounds(pts, { padding: [90, 90], maxZoom: 16 }); fitted = true; }
-}
-function render() {
-  const target = pin || me, label = pin ? 'your pickup pin' : 'you';
-  const list = taxis.map(t => ({ ...t, d: target ? metres(target, t) : null }));
-  if (target) list.sort((a, b) => a.d - b.d);
-  const near = target && list.length ? list[0] : null;
-  const byId = new Map(taxis.map(t => [t.id, t]));
-  for (const [id, m] of markers) {
-    const el = m.getElement(); if (!el) continue;
-    const isNear = !!near && near.id === id;
-    el.classList.toggle('near', isNear);
-    const tag = el.querySelector('.tag');
-    if (tag) { tag.textContent = isNear ? fmt(near.d) : ''; tag.style.display = isNear ? 'block' : 'none'; }
-    // Number plate under the taxi (textContent keeps it safe from injected HTML)
-    const pl = el.querySelector('.plate');
-    if (pl) pl.textContent = (byId.get(id) || {}).plate || '';
+function readPlate() {
+  const p = plateEl.value.trim().replace(/\s+/g, ' ');
+  if (p.replace(/ /g, '').length < 4) {
+    plateEl.classList.add('bad');
+    $('plateErr').textContent = 'Please type your full number plate first.';
+    $('plateErr').hidden = false; plateEl.focus();
+    return null;
   }
-  line.setLatLngs(near ? [[near.lat, near.lng], [target.lat, target.lng]] : []);
-  $('title').textContent = list.length ? list.length + (list.length === 1 ? ' taxi live' : ' taxis live') : 'No taxis live right now';
-  $('sub').textContent = !list.length ? 'This updates on its own when a driver starts sharing.'
-    : near ? 'Nearest is ' + fmt(near.d) + ' from ' + label + ' · about ' + eta(near.d) + ' (estimate)'
-    : 'Allow location to see how far they are.';
-  const box = $('list'); box.replaceChildren();
-  list.forEach((t, i) => {
-    const b = document.createElement('button'); b.className = 'row' + (i === 0 && near ? ' first' : '');
-    const name = document.createElement('span'); name.textContent = '🚕 ' + (t.plate || t.id);
-    const info = document.createElement('small');
-    info.textContent = (t.d != null ? fmt(t.d) + ' · ' : '') + Math.max(0, Math.round((t.age || 0) / 1000)) + 's ago';
-    b.append(name, info); b.onclick = () => map.flyTo([t.lat, t.lng], 16); box.append(b);
-  });
+  try { localStorage.setItem('jl_plate', p); } catch (e) {}
+  return p;
 }
-async function poll() {
+
+// ---- State ----
+let live = false, paused = false, plate = '', watchId = null, timer = null, ticker = null, wake = null;
+let last = null, lastPosAt = 0, lastOkAt = 0, failing = false;
+
+function setPill(kind, text) {
+  $('status').className = 'status ' + kind;
+  $('pillText').textContent = text;
+}
+function showAsk(msg) { $('ask').hidden = !msg; $('ask').textContent = msg || ''; }
+
+// ---- GPS ----
+function onPos(p) {
+  last = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, sp: p.coords.speed };
+  lastPosAt = Date.now();
+  showAsk('');
+  const a = last.acc, el = $('rAcc');
+  el.className = a <= 30 ? 'good' : a <= 100 ? 'fair' : 'poor';
+  el.textContent = (a <= 30 ? 'Good' : a <= 100 ? 'Fair' : 'Weak') + ' (about ' + Math.round(a) + ' m)';
+  if (!timer) { send(); timer = setInterval(send, SEND_EVERY); }
+}
+function onErr(err) {
+  if (err.code === 1) {
+    setPill('fail', 'Location is blocked');
+    showAsk('Allow location for this site. Android (Chrome): tap the lock icon by the address, then Permissions, Location, Allow. iPhone: Settings, Privacy & Security, Location Services, Safari Websites, While Using. Then tap Start sharing again.');
+    stop(true);
+  } else {
+    setPill('warn', 'Looking for GPS…');
+    showAsk('We can\'t find you yet. Make sure Location (GPS) is switched on in your phone\'s quick settings and go where the sky is open.');
+  }
+}
+
+// ---- Sending ----
+function payload(extra) {
+  return JSON.stringify(Object.assign({ id: ID, plate: plate }, extra || {}));
+}
+async function send() {
+  if (!live || paused || !last) return;
+  if (Date.now() - lastPosAt > STALE_MS) { setPill('warn', 'Waiting for GPS…'); return; }
   try {
-    taxis = await (await fetch('/api/taxis', { cache: 'no-store' })).json();
-    const seen = new Set();
-    for (const t of taxis) {
-      seen.add(t.id);
-      if (markers.has(t.id)) markers.get(t.id).setLatLng([t.lat, t.lng]);
-      else markers.set(t.id, L.marker([t.lat, t.lng], { icon: taxiIcon }).addTo(map));
-    }
-    for (const [id, m] of markers) if (!seen.has(id)) { map.removeLayer(m); markers.delete(id); }
-    render(); fit(false);
-  } catch (e) { $('sub').textContent = 'Connection lost. Retrying…'; }
+    const res = await fetch(API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+      body: payload({ lat: last.lat, lng: last.lng, acc: Math.round(last.acc), sp: last.sp, ts: Date.now() })
+    });
+    if (!res.ok) throw new Error('bad status ' + res.status);
+    lastOkAt = Date.now(); failing = false;
+    setPill('live', 'You are live on the map');
+  } catch (e) {
+    failing = true;
+    setPill('fail', 'Can\'t reach JoziLift. Retrying…');
+  }
 }
-poll(); setInterval(poll, 3000);
+function tick() {
+  $('rSent').textContent = lastOkAt ? Math.max(0, Math.round((Date.now() - lastOkAt) / 1000)) + ' seconds ago' : '-';
+}
+
+// ---- Keep the screen on (GPS stops when the screen turns off) ----
+async function lockScreen() {
+  const note = $('wakeNote');
+  try {
+    if ('wakeLock' in navigator) {
+      wake = await navigator.wakeLock.request('screen');
+      wake.addEventListener('release', () => { wake = null; });
+      note.textContent = 'Your screen will stay on while you share. Keep this page open and in front.';
+    } else {
+      note.textContent = 'Keep this page open and in front, and set your screen to stay on, or your location will stop updating.';
+    }
+  } catch (e) {
+    note.textContent = 'Keep this page open and in front, and set your screen to stay on, or your location will stop updating.';
+  }
+}
+// ---- Auto pause / resume ----
+// Leaving this page (another app, or screen locked) takes the taxi off the map straight away.
+// Coming back puts it on again by itself: no need to type the plate or tap anything.
+function pause() {
+  if (!live || paused) return;
+  paused = true;
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  clearInterval(timer); timer = null;
+  last = null;
+  // No "stop" message here: the map keeps showing the taxi as "last seen" until the server drops it.
+  // A full close of the page (pagehide) still removes it straight away.
+  setPill('warn', 'Paused. Open JoziLift again to go live');
+}
+function resume() {
+  if (!live || !paused) return;
+  paused = false;
+  setPill('warn', 'Finding you again…');
+  $('rAcc').className = ''; $('rAcc').textContent = 'Finding you…';
+  watchId = navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+  lockScreen();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!live) return;
+  if (document.visibilityState === 'hidden') pause(); else resume();
+});
+
+// ---- Start / stop ----
+function start() {
+  const p = readPlate(); if (!p) return;
+  if (!navigator.geolocation) {
+    $('status').hidden = false; setPill('fail', 'This browser cannot share location');
+    showAsk('Please open JoziLift in Chrome or Safari.'); return;
+  }
+  plate = p; live = true; paused = false; last = null; lastOkAt = 0;
+  plateEl.disabled = true; $('steps').hidden = true;
+  goBtn.textContent = 'Stop sharing'; goBtn.classList.add('stop');
+  $('status').hidden = false; $('rPlate').textContent = plate;
+  $('rAcc').className = ''; $('rAcc').textContent = 'Finding you…'; $('rSent').textContent = '-';
+  setPill('warn', 'Starting…'); showAsk('');
+  watchId = navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+  ticker = setInterval(tick, 1000);
+  lockScreen();
+}
+function stop(keepMessage) {
+  if (!live) return;
+  live = false; paused = false;
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId); watchId = null;
+  clearInterval(timer); timer = null; clearInterval(ticker); ticker = null;
+  if (wake) { try { wake.release(); } catch (e) {} wake = null; }
+  // Tell the server we're off the road so the taxi disappears from the map
+  try { fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload({ stop: true }), keepalive: true }); } catch (e) {}
+  plateEl.disabled = false; $('steps').hidden = false;
+  goBtn.textContent = 'Start sharing'; goBtn.classList.remove('stop');
+  if (!keepMessage) { setPill('', 'You are not sharing'); $('wakeNote').textContent = ''; showAsk(''); }
+}
+goBtn.addEventListener('click', () => live ? stop(false) : start());
+plateEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!live) start(); } });
+
+// If the page is closed, take the taxi off the map
+window.addEventListener('pagehide', () => {
+  if (live && navigator.sendBeacon) {
+    navigator.sendBeacon(API, new Blob([payload({ stop: true })], { type: 'application/json' }));
+  }
+});
 </script>
 </body>
 </html>
