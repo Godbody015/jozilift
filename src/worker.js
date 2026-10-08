@@ -1,11 +1,16 @@
 // Holds live taxi positions in memory. Nothing is written to disk,
 // so no location history is kept.
+
+// Keep a taxi for 3 minutes after its last update. The map shows it faded as
+// "last seen" once it has been quiet for 20 seconds, then it drops off here.
+const KEEP_MS = 180000;
+
 export class Hub {
   constructor() { this.taxis = new Map(); }
 
   async fetch(req) {
     const now = Date.now();
-    for (const [id, t] of this.taxis) if (now - t.ts > 30000) this.taxis.delete(id);
+    for (const [id, t] of this.taxis) if (now - t.ts > KEEP_MS) this.taxis.delete(id);
 
     if (req.method === "POST") {
       const b = await req.json().catch(() => ({}));
@@ -14,7 +19,15 @@ export class Hub {
       if (b.stop) {
         this.taxis.delete(id);
       } else if (Number.isFinite(b.lat) && Number.isFinite(b.lng)) {
-        this.taxis.set(id, { id, lat: b.lat, lng: b.lng, sp: b.sp ?? null, ts: now });
+        // Number plate: letters, numbers and single spaces only, max 12 characters.
+        // If an update arrives without one, keep the plate we already had.
+        const plate = String(b.plate || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9 ]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 12) || this.taxis.get(id)?.plate || "";
+        this.taxis.set(id, { id, plate, lat: b.lat, lng: b.lng, sp: b.sp ?? null, ts: now });
       } else {
         return new Response("bad position", { status: 400 });
       }
