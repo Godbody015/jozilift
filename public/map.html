@@ -151,6 +151,17 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_D
 }).addTo(map);
 
 const $ = id => document.getElementById(id);
+ let TOKEN = null, ROLE = null; try { TOKEN = localStorage.getItem('jl_token'); } catch (e) {}
+if (TOKEN) fetch('/api/me', { headers: { Authorization: 'Bearer ' + TOKEN } }).then(r => r.ok ? r.json() : null).then(u => {
+  if (!u) return; ROLE = u.role;
+  $('acct').textContent = 'Signed in as ' + u.name + ' · Log out'; $('acct').href = '#';
+  $('acct').onclick = e => { e.preventDefault(); try { localStorage.removeItem('jl_token'); localStorage.removeItem('jl_role'); } catch (x) {} location.reload(); };
+}).catch(() => {});
+function logRequest(lat, lng, name) {
+  if (ROLE !== 'commuter') return;
+  fetch('/api/requests', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
+    body: JSON.stringify({ lat, lng, label: name || null }) }).catch(() => {});
+} 
 const meIcon = L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
 const pinIcon = L.divIcon({ className: '', html: '<div class="pinwrap"><div class="pin"></div></div>', iconSize: [30, 34], iconAnchor: [15, 34] });
 // The .plate span is filled in render() from the plate each driver registered
