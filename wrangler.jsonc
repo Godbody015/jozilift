@@ -9,5 +9,12 @@
   "durable_objects": {
     "bindings": [{ "name": "HUB", "class_name": "Hub" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Hub"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Hub"] }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "jozilift",
+      "database_id": "c2ac18ef-4490-4c53-8036-9302a1842b01"
+    }
+  ]
 }
