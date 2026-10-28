@@ -199,6 +199,7 @@ function onPos(p) {
   if (!AREA.contains(me)) { acc.className = 'acc poor'; acc.textContent = 'You seem to be outside Gauteng. JoziLift only covers Gauteng for now.'; }
   else { acc.className = 'acc ' + cls; acc.textContent = '📡 Your location accuracy: ' + label + ' (about ' + Math.round(me.acc) + ' m)' + (cls === 'poor' ? '. Go outside or switch on GPS / high accuracy for a better fix.' : ''); }
   render();
+  logRequest(lat, lng, name);
 }
 function onPosErr(err) {
   watching = false;
