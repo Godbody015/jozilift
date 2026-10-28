@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JoziLift: log in or register</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--black:#0a0a0a;--yellow:#FFD000;--white:#f5f5f0;--grey:#17171a;--mid:#2c2c30;--muted:#9a9aa0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--black);color:var(--white);font-family:'DM Sans',sans-serif;padding:calc(env(safe-area-inset-top,0px) + 16px) 18px calc(env(safe-area-inset-bottom,0px) + 28px)}
+.wrap{max-width:460px;margin:0 auto}
+.brand{font:28px 'Bebas Neue',sans-serif;color:var(--white);text-decoration:none}.brand span{color:var(--yellow)}
+h1{font:400 clamp(38px,10vw,50px)/1 'Bebas Neue',sans-serif;margin-top:18px}
+.card{margin-top:18px;background:var(--grey);border:1px solid var(--mid);border-radius:20px;padding:18px}
+.row{display:flex;gap:8px;margin-bottom:6px}
+.b{flex:1;padding:11px 6px;border-radius:12px;border:1px solid var(--mid);background:none;color:var(--white);font:700 15px 'DM Sans',sans-serif;cursor:pointer}
+.b.on{background:var(--yellow);color:#000;border-color:var(--yellow)}
+label{display:block;font-weight:700;font-size:15px;margin-top:14px}
+input[type=text],input[type=tel],input[type=password]{width:100%;margin-top:6px;padding:14px;border-radius:12px;border:2px solid var(--mid);background:var(--black);color:var(--white);font:500 17px 'DM Sans',sans-serif}
+input:focus-visible,.b:focus-visible,.go:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+.hint{color:var(--muted);font-size:14px;margin-top:6px;line-height:1.4}
+.ck{display:flex;gap:10px;align-items:flex-start;margin-top:16px;font-size:14px;line-height:1.45;font-weight:500}.ck input{width:22px;height:22px;margin-top:1px;flex:none;accent-color:#FFD000}
+.go{display:block;width:100%;margin-top:18px;padding:16px;border:0;border-radius:14px;font:700 18px 'DM Sans',sans-serif;background:var(--yellow);color:#000;cursor:pointer}
+.err{color:#ff7b7b;font-weight:700;font-size:15px;margin-top:12px}.err:empty{display:none}
+[hidden]{display:none!important}
+</style></head><body><div class="wrap">
+<a class="brand" href="/" aria-label="JoziLift home">Jozi<span>Lift</span></a>
+<h1>Your account</h1>
+<div class="card">
+  <div class="row"><button class="b on" id="mLogin" type="button">Log in</button><button class="b" id="mReg" type="button">Register</button></div>
+  <div id="regOnly" hidden>
+    <label>I am a</label>
+    <div class="row"><button class="b on" data-r="commuter" type="button">Commuter</button><button class="b" data-r="driver" type="button">Driver</button><button class="b" data-r="owner" type="button">Owner</button></div>
+    <label for="name">Your name</label><input id="name" type="text" autocomplete="name">
+  </div>
+  <label for="phone">Phone number</label><input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="082 123 4567">
+  <label for="pass">Password</label><input id="pass" type="password" autocomplete="current-password">
+  <div id="drv" hidden>
+    <label for="plate">Taxi number plate</label><input id="plate" type="text" maxlength="12" autocapitalize="characters" placeholder="ABC 123 GP">
+    <label for="model">Taxi model</label><input id="model" type="text" placeholder="Toyota Quantum">
+    <label for="colour">Taxi colour</label><input id="colour" type="text" placeholder="White">
+    <label for="ownerPhone">Owner's phone number (optional)</label><input id="ownerPhone" type="tel" inputmode="tel">
+    <div class="hint">If your owner has registered on JoziLift, type their number so they can see your trips.</div>
+  </div>
+  <label class="ck" id="ckRow" hidden><input id="consent" type="checkbox"><span>I agree that JoziLift stores my account details and, for drivers, trip locations, and for commuters, pickup pins, to run the service and report on it. I can ask for my data to be removed.</span></label>
+  <div class="err" id="err" role="alert"></div>
+  <button class="go" id="go" type="button">Log in</button>
+</div></div>
+<script>
+const $ = id => document.getElementById(id), q = new URLSearchParams(location.search);
+let reg = q.get('mode') === 'register', role = ['commuter','driver','owner'].includes(q.get('role')) ? q.get('role') : 'commuter';
+function paint() {
+  $('mLogin').classList.toggle('on', !reg); $('mReg').classList.toggle('on', reg);
+  $('regOnly').hidden = !reg; $('ckRow').hidden = !reg; $('drv').hidden = !(reg && role === 'driver');
+  document.querySelectorAll('[data-r]').forEach(b => b.classList.toggle('on', b.dataset.r === role));
+  $('go').textContent = reg ? 'Create my account' : 'Log in'; $('err').textContent = '';
+}
+$('mLogin').onclick = () => { reg = false; paint(); }; $('mReg').onclick = () => { reg = true; paint(); };
+document.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { role = b.dataset.r; paint(); });
+paint();
+const HOME = { owner: '/fleet.html', driver: '/driver.html', commuter: '/map.html' };
+$('go').onclick = async () => {
+  $('err').textContent = '';
+  const body = reg ? { role, name: $('name').value, phone: $('phone').value, password: $('pass').value, consent: $('consent').checked,
+    plate: $('plate').value, model: $('model').value, colour: $('colour').value, owner_phone: $('ownerPhone').value }
+    : { phone: $('phone').value, password: $('pass').value };
+  try {
+    const res = await fetch(reg ? '/api/register' : '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { $('err').textContent = d.error || 'Something went wrong. Try again.'; return; }
+    try { localStorage.setItem('jl_token', d.token); localStorage.setItem('jl_role', d.user.role); } catch (e) {}
+    location.href = HOME[d.user.role] || '/';
+  } catch (e) { $('err').textContent = 'Can\'t reach JoziLift. Check your connection and try again.'; }
+};
+</script></body></html>
